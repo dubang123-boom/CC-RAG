@@ -1,18 +1,27 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { flushSync } from 'react-dom'
+import { toast } from 'sonner'
 import { apiFetch, streamChat } from '@/lib/api'
 import AppLayout from '@/components/layout/AppLayout'
 import ConversationList from '@/components/chat/ConversationList'
 import MessageList from '@/components/chat/MessageList'
 import ChatInput from '@/components/chat/ChatInput'
-import type { Conversation, Message } from '@/types'
+import type { AgentStep, Conversation, EnrichedMessage } from '@/types'
 
-export default function ChatPage() {
+interface ChatPageProps {
+  onNavigateToImport: () => void
+}
+
+export default function ChatPage({ onNavigateToImport }: ChatPageProps) {
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
-  const [messages, setMessages] = useState<Message[]>([])
+  const [messages, setMessages] = useState<EnrichedMessage[]>([])
   const [streamingContent, setStreamingContent] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
   const [loadingConversations, setLoadingConversations] = useState(true)
+  const [currentSteps, setCurrentSteps] = useState<AgentStep[]>([])
+  // Use a ref so the onDone closure always reads the latest steps
+  const currentStepsRef = useRef<AgentStep[]>([])
 
   const fetchConversations = useCallback(async () => {
     try {
@@ -20,7 +29,7 @@ export default function ChatPage() {
       const data = await res.json()
       setConversations(data)
     } catch (err) {
-      console.error('Failed to fetch conversations:', err)
+      toast.error('Failed to fetch conversations')
     } finally {
       setLoadingConversations(false)
     }
@@ -72,15 +81,16 @@ export default function ChatPage() {
         setActiveId(null)
         setMessages([])
       }
+      toast.success('Conversation deleted')
     } catch (err) {
-      console.error('Failed to delete conversation:', err)
+      toast.error('Failed to delete conversation')
     }
   }, [activeId])
 
   const handleSendMessage = useCallback(async (content: string) => {
     if (!activeId || isStreaming) return
 
-    const userMessage: Message = {
+    const userMessage: EnrichedMessage = {
       id: crypto.randomUUID(),
       conversation_id: activeId,
       user_id: '',
@@ -91,6 +101,15 @@ export default function ChatPage() {
     setMessages((prev) => [...prev, userMessage])
     setIsStreaming(true)
     setStreamingContent('')
+    setCurrentSteps([])
+    currentStepsRef.current = []
+
+    const addStep = (step: AgentStep) => {
+      currentStepsRef.current = [...currentStepsRef.current, step]
+      flushSync(() => {
+        setCurrentSteps([...currentStepsRef.current])
+      })
+    }
 
     let accumulated = ''
 
@@ -101,30 +120,53 @@ export default function ChatPage() {
         accumulated += delta
         setStreamingContent(accumulated)
       },
+      (tool, query) => {
+        addStep({ type: 'tool_call', tool, query })
+      },
+      (preview, data) => {
+        addStep({ type: 'tool_result', content: preview, data })
+      },
+      (subQueries, reasoning) => {
+        addStep({ type: 'decompose', sub_queries: subQueries, reasoning })
+      },
+      (confidence, note) => {
+        addStep({ type: 'reflect', confidence, note })
+      },
+      (route, reasoning) => {
+        addStep({ type: 'route', route, reasoning })
+      },
       () => {
-        const assistantMessage: Message = {
+        const steps = currentStepsRef.current
+        const assistantMessage: EnrichedMessage = {
           id: crypto.randomUUID(),
           conversation_id: activeId,
           user_id: '',
           role: 'assistant',
           content: accumulated,
           created_at: new Date().toISOString(),
+          agentSteps: steps.length > 0 ? steps : undefined,
         }
         setMessages((prev) => [...prev, assistantMessage])
         setStreamingContent('')
         setIsStreaming(false)
+        setCurrentSteps([])
+        currentStepsRef.current = []
         fetchConversations()
       },
       (error) => {
-        console.error('Stream error:', error)
+        toast.error('Chat error: ' + error)
         setStreamingContent('')
         setIsStreaming(false)
+        setCurrentSteps([])
+        currentStepsRef.current = []
       },
     )
   }, [activeId, isStreaming, fetchConversations])
 
   return (
     <AppLayout
+      activeView="chat"
+      onNavigateToImport={onNavigateToImport}
       sidebar={
         <ConversationList
           conversations={conversations}
@@ -137,7 +179,12 @@ export default function ChatPage() {
     >
       {activeId ? (
         <>
-          <MessageList messages={messages} streamingContent={streamingContent} />
+          <MessageList
+            messages={messages}
+            streamingContent={streamingContent}
+            streamingSteps={isStreaming ? currentSteps : undefined}
+          />
+
           <ChatInput onSend={handleSendMessage} disabled={isStreaming} />
         </>
       ) : (

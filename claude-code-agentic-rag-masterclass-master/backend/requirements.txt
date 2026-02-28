@@ -7,3 +7,7 @@ openai
 langsmith
 sse-starlette
 httpx
+tiktoken
+python-multipart
+pypdf
+tavily-python

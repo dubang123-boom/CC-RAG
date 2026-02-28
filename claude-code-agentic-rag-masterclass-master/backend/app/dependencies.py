@@ -1,15 +1,10 @@
 from fastapi import Depends, HTTPException, Request
 from supabase import create_client, Client
-from openai import OpenAI
 from app.config import settings
 
 
 def get_supabase_client() -> Client:
     return create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
-
-
-def get_openai_client() -> OpenAI:
-    return OpenAI(api_key=settings.OPENAI_API_KEY)
 
 
 async def get_current_user(request: Request) -> dict:

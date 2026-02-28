@@ -1,5 +1,5 @@
-from pydantic import BaseModel
-from typing import Optional
+from pydantic import BaseModel, Field
+from typing import Optional, Literal
 from datetime import datetime
 
 class ConversationCreate(BaseModel):
@@ -9,12 +9,11 @@ class ConversationResponse(BaseModel):
     id: str
     user_id: str
     title: str
-    openai_response_id: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
 class MessageCreate(BaseModel):
-    content: str
+    content: str = Field(..., min_length=1, max_length=32000)
 
 class MessageResponse(BaseModel):
     id: str
@@ -23,3 +22,15 @@ class MessageResponse(BaseModel):
     role: str
     content: str
     created_at: datetime
+
+
+# ── Memory models ────────────────────────────────────────────────────
+
+class MemoryExtraction(BaseModel):
+    memories: list[str]
+
+
+class ConversationSummary(BaseModel):
+    summary: str
+
+

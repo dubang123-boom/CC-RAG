@@ -53,6 +53,7 @@ export default function ChatInput({ onSend, disabled }: ChatInputProps) {
           disabled={disabled || !input.trim()}
           size="icon"
           className="shrink-0"
+          aria-label="Send message"
         >
           <SendHorizontal className="h-4 w-4" />
         </Button>

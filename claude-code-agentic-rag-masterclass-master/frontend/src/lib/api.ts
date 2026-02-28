@@ -1,5 +1,20 @@
 import { supabase } from './supabase'
 
+export async function uploadFile(path: string, formData: FormData): Promise<Response> {
+  const { data: { session } } = await supabase.auth.getSession()
+  const headers: Record<string, string> = {}
+  if (session?.access_token) {
+    headers['Authorization'] = `Bearer ${session.access_token}`
+  }
+  // Do NOT set Content-Type — browser sets multipart boundary automatically
+  const res = await fetch(`/api${path}`, { method: 'POST', headers, body: formData })
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: 'Upload failed' }))
+    throw new Error(error.detail || 'Upload failed')
+  }
+  return res
+}
+
 async function getAuthHeaders(): Promise<Record<string, string>> {
   const { data: { session } } = await supabase.auth.getSession()
   if (!session?.access_token) return {}
@@ -24,7 +39,12 @@ export async function streamChat(
   conversationId: string,
   content: string,
   onDelta: (text: string) => void,
-  onDone: (responseId: string) => void,
+  onToolCall: (tool: string, query: string) => void,
+  onToolResult: (preview: string, data?: any) => void,
+  onDecompose: (subQueries: string[], reasoning: string) => void,
+  onReflect: (confidence: 'high' | 'medium' | 'low', note: string) => void,
+  onRoute: (route: string, reasoning: string) => void,
+  onDone: () => void,
   onError: (error: string) => void,
 ) {
   const headers = {
@@ -67,8 +87,18 @@ export async function streamChat(
           const data = JSON.parse(line.slice(6))
           if (data.type === 'delta') {
             onDelta(data.content)
+          } else if (data.type === 'tool_call') {
+            onToolCall(data.tool, data.query)
+          } else if (data.type === 'tool_result') {
+            onToolResult(data.content, data.data)
+          } else if (data.type === 'decompose') {
+            onDecompose(data.sub_queries, data.reasoning)
+          } else if (data.type === 'reflect') {
+            onReflect(data.confidence, data.note)
+          } else if (data.type === 'route') {
+            onRoute(data.route, data.reasoning)
           } else if (data.type === 'done') {
-            onDone(data.response_id)
+            onDone()
           } else if (data.type === 'error') {
             onError(data.content)
           }
