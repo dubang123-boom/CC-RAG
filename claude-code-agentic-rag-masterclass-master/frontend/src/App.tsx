@@ -4,8 +4,9 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import LoginPage from './pages/LoginPage'
 import ChatPage from './pages/ChatPage'
 import ImportPage from './pages/ImportPage'
+import SettingsPage from './pages/SettingsPage'
 
-type View = 'chat' | 'import'
+type View = 'chat' | 'import' | 'settings'
 
 function AppContent() {
   const { user, loading } = useAuth()
@@ -29,9 +30,14 @@ function AppContent() {
     )
   }
 
+  if (view === 'settings') {
+    return <SettingsPage onBack={() => setView('chat')} />
+  }
+
   return (
     <ChatPage
       onNavigateToImport={() => setView('import')}
+      onNavigateToSettings={() => setView('settings')}
     />
   )
 }

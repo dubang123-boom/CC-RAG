@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import type { LLMSettings } from '@/types'
 
 export async function uploadFile(path: string, formData: FormData): Promise<Response> {
   const { data: { session } } = await supabase.auth.getSession()
@@ -9,6 +10,9 @@ export async function uploadFile(path: string, formData: FormData): Promise<Resp
   // Do NOT set Content-Type — browser sets multipart boundary automatically
   const res = await fetch(`/api${path}`, { method: 'POST', headers, body: formData })
   if (!res.ok) {
+    if (res.status === 429) {
+      throw new Error('上传过于频繁，请稍后再试（每分钟最多5次）')
+    }
     const error = await res.json().catch(() => ({ detail: 'Upload failed' }))
     throw new Error(error.detail || 'Upload failed')
   }
@@ -35,6 +39,18 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
   return res
 }
 
+export async function getLLMSettings(): Promise<LLMSettings> {
+  const res = await apiFetch('/settings/llm')
+  return res.json()
+}
+
+export async function saveLLMSettings(data: LLMSettings): Promise<void> {
+  await apiFetch('/settings/llm', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
 export async function streamChat(
   conversationId: string,
   content: string,
@@ -59,6 +75,10 @@ export async function streamChat(
   })
 
   if (!res.ok) {
+    if (res.status === 429) {
+      onError('发送消息过于频繁，请稍后再试（每分钟最多10条）')
+      return
+    }
     const error = await res.json().catch(() => ({ detail: 'Request failed' }))
     onError(error.detail || 'Request failed')
     return

@@ -7,7 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { LogOut, User, MessageSquare, FileUp, Menu, Sun, Moon } from 'lucide-react'
+import { LogOut, User, MessageSquare, FileUp, Menu, Sun, Moon, Settings } from 'lucide-react'
 
 interface AppLayoutProps {
   children: ReactNode
@@ -15,6 +15,7 @@ interface AppLayoutProps {
   activeView?: 'chat' | 'import'
   onNavigateToChat?: () => void
   onNavigateToImport?: () => void
+  onNavigateToSettings?: () => void
 }
 
 export default function AppLayout({
@@ -23,6 +24,7 @@ export default function AppLayout({
   activeView = 'chat',
   onNavigateToChat,
   onNavigateToImport,
+  onNavigateToSettings,
 }: AppLayoutProps) {
   const { user, signOut } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -46,8 +48,19 @@ export default function AppLayout({
     <div className="flex h-screen bg-background">
       {/* Sidebar - desktop */}
       {sidebar && (
-        <div className="hidden sm:block w-64 shrink-0 border-r bg-muted/30">
-          {sidebar}
+        <div className="hidden sm:flex sm:flex-col w-64 shrink-0 border-r bg-muted/30">
+          <div className="flex-1 overflow-hidden">{sidebar}</div>
+          <div className="border-t p-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start gap-2"
+              onClick={onNavigateToSettings}
+            >
+              <Settings className="h-4 w-4" />
+              Settings
+            </Button>
+          </div>
         </div>
       )}
 
@@ -58,8 +71,19 @@ export default function AppLayout({
             className="fixed inset-0 z-40 bg-black/50 sm:hidden"
             onClick={() => setSidebarOpen(false)}
           />
-          <div className="fixed inset-y-0 left-0 z-50 w-64 border-r bg-muted/30 sm:hidden transition-transform">
-            {sidebar}
+          <div className="fixed inset-y-0 left-0 z-50 w-64 border-r bg-muted/30 sm:hidden transition-transform flex flex-col">
+            <div className="flex-1 overflow-hidden">{sidebar}</div>
+            <div className="border-t p-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start gap-2"
+                onClick={() => { setSidebarOpen(false); onNavigateToSettings?.() }}
+              >
+                <Settings className="h-4 w-4" />
+                Settings
+              </Button>
+            </div>
           </div>
         </>
       )}

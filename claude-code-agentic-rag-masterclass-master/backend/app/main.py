@@ -2,8 +2,10 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi.errors import RateLimitExceeded
 from app.config import settings
-from app.routers import auth, chat, documents
+from app.rate_limit import limiter
+from app.routers import auth, chat, documents, settings as settings_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -12,6 +14,18 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="RAG Masterclass API")
+
+app.state.limiter = limiter
+
+
+async def _rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+    return JSONResponse(
+        status_code=429,
+        content={"detail": f"请求过于频繁，请稍后再试。（限制：{exc.detail}）"},
+    )
+
+
+app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -24,6 +38,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(chat.router, prefix="/api", tags=["chat"])
 app.include_router(documents.router, prefix="/api", tags=["documents"])
+app.include_router(settings_router.router, prefix="/api", tags=["settings"])
 
 
 @app.exception_handler(Exception)

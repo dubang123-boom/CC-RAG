@@ -10,9 +10,10 @@ import type { AgentStep, Conversation, EnrichedMessage } from '@/types'
 
 interface ChatPageProps {
   onNavigateToImport: () => void
+  onNavigateToSettings: () => void
 }
 
-export default function ChatPage({ onNavigateToImport }: ChatPageProps) {
+export default function ChatPage({ onNavigateToImport, onNavigateToSettings }: ChatPageProps) {
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
   const [messages, setMessages] = useState<EnrichedMessage[]>([])
@@ -167,6 +168,7 @@ export default function ChatPage({ onNavigateToImport }: ChatPageProps) {
     <AppLayout
       activeView="chat"
       onNavigateToImport={onNavigateToImport}
+      onNavigateToSettings={onNavigateToSettings}
       sidebar={
         <ConversationList
           conversations={conversations}

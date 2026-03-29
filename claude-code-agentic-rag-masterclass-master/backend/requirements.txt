@@ -11,3 +11,5 @@ tiktoken
 python-multipart
 pypdf
 tavily-python
+slowapi
+sqlglot

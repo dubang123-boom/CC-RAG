@@ -59,6 +59,11 @@ RETRIEVAL_TOOL = {
 }
 
 
+def build_user_llm_client(api_key: str, base_url: str) -> OpenAI:
+    """Build a per-request OpenAI-compatible client using user-provided credentials."""
+    return _build_client(api_key, base_url)
+
+
 def _build_client(api_key: str, base_url: str) -> OpenAI:
     """Build an OpenAI-compatible client for any provider, with optional LangSmith tracing."""
     os.environ.setdefault("LANGSMITH_TRACING", str(settings.LANGSMITH_TRACING).lower())
@@ -123,22 +128,26 @@ def create_chat_stream_with_tools(
     messages: list[dict],
     tools: list[dict] | None = None,
     extra_system_context: str = "",
+    client: OpenAI | None = None,
+    model: str | None = None,
+    system_prompt: str | None = None,
 ):
     """
     Streaming Chat Completions with optional tool definitions.
-    Prepends SYSTEM_PROMPT. Returns the raw stream object.
+    Prepends SYSTEM_PROMPT (or system_prompt override). Returns the raw stream object.
     """
-    client = get_llm_client()
-    system_content = SYSTEM_PROMPT
+    llm = client or get_llm_client()
+    base_prompt = system_prompt if system_prompt is not None else SYSTEM_PROMPT
+    system_content = base_prompt
     if extra_system_context:
         system_content = system_content + "\n\n" + extra_system_context
     all_messages = [{"role": "system", "content": system_content}] + messages
     kwargs: dict = {
-        "model": settings.LLM_MODEL,
+        "model": model or settings.LLM_MODEL,
         "messages": all_messages,
         "stream": True,
     }
     if tools:
         kwargs["tools"] = tools
         kwargs["tool_choice"] = "auto"
-    return client.chat.completions.create(**kwargs)
+    return llm.chat.completions.create(**kwargs)

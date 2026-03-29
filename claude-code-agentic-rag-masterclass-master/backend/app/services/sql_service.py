@@ -1,4 +1,6 @@
-import re
+import sqlglot
+import sqlglot.errors
+import sqlglot.expressions as exp
 from pydantic import BaseModel, Field
 from app.services.llm_service import get_llm_client
 from app.config import settings
@@ -65,40 +67,42 @@ def generate_sql(question: str) -> GeneratedSQL | None:
         return None
 
 
-_DANGEROUS_PATTERN = re.compile(
-    r'\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE)\b',
-    re.IGNORECASE,
-)
-
-_FROM_TABLE_PATTERN = re.compile(
-    r'\bFROM\s+(\w+)',
-    re.IGNORECASE,
-)
+_ALLOWED_TABLES = {"documents"}
 
 
 def _is_safe_query(sql: str) -> bool:
-    """Validate that a SQL query is safe to execute."""
-    stripped = sql.strip()
+    """Validate SQL using AST parsing instead of regex.
 
-    # Must start with SELECT
-    if not stripped.upper().startswith("SELECT"):
+    Checks:
+    1. {{USER_ID}} placeholder present (raw string check)
+    2. Parses as valid SQL (no syntax errors)
+    3. Exactly a SELECT statement (no DDL/DML/UNION tricks)
+    4. All table references are in the whitelist (catches UNION, subqueries, CTEs)
+    """
+    # Check placeholder before parsing (raw string check)
+    if "{{USER_ID}}" not in sql:
         return False
 
-    # No dangerous operations
-    if _DANGEROUS_PATTERN.search(stripped):
+    # Substitute placeholder with a bare UUID for parsing.
+    # The placeholder appears inside SQL quotes already: WHERE user_id = '{{USER_ID}}'
+    # so replacing with just the UUID value yields a valid string literal.
+    parse_sql = sql.replace("{{USER_ID}}", "00000000-0000-0000-0000-000000000000")
+
+    try:
+        tree = sqlglot.parse_one(parse_sql, dialect="postgres")
+    except sqlglot.errors.ParseError:
         return False
 
-    # Must contain user_id placeholder
-    if "{{USER_ID}}" not in stripped:
+    # Must be a SELECT statement (not INSERT/UPDATE/DELETE/DDL)
+    if not isinstance(tree, exp.Select):
         return False
 
-    # FROM clause must reference only documents table
-    tables = _FROM_TABLE_PATTERN.findall(stripped)
+    # All table references (includes UNION, subqueries, CTEs) must be whitelisted
+    tables = {t.name.lower() for t in tree.find_all(exp.Table)}
     if not tables:
         return False
-    for table in tables:
-        if table.lower() not in ("documents",):
-            return False
+    if not tables.issubset(_ALLOWED_TABLES):
+        return False
 
     return True
 

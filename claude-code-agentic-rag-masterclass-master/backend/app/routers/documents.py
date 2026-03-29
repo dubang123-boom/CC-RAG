@@ -1,6 +1,7 @@
 import hashlib
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, BackgroundTasks
 from app.dependencies import get_current_user, get_supabase_client
+from app.rate_limit import limiter
 from app.services.import_service import process_document
 
 router = APIRouter()
@@ -26,7 +27,9 @@ async def list_documents(user: dict = Depends(get_current_user)):
 
 
 @router.post("/documents")
+@limiter.limit("5/minute")
 async def upload_document(
+    request: Request,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     user: dict = Depends(get_current_user),

@@ -31,6 +31,14 @@ export interface EnrichedMessage extends Message {
   agentSteps?: AgentStep[]
 }
 
+export interface LLMSettings {
+  llm_api_key: string
+  llm_base_url: string
+  llm_model: string
+  llm_title_model: string
+  llm_system_prompt: string
+}
+
 export interface DocumentMetadata {
   title: string
   summary: string

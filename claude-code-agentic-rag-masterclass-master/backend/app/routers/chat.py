@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sse_starlette.sse import EventSourceResponse
 from app.dependencies import get_current_user, get_supabase_client
 from app.models.chat import ConversationCreate, MessageCreate
-from app.services.llm_service import create_chat_stream_with_tools
+from app.services.llm_service import create_chat_stream_with_tools, build_user_llm_client
 from app.services.retrieval_service import retrieve_chunks
 from app.services.decompose_service import decompose_query
 from app.services.reflection_service import reflect_on_answer
@@ -12,6 +12,7 @@ from app.services.router_service import route_query, QueryRoute
 from app.services.tavily_service import search_web, format_search_results_for_llm
 from app.services.sql_service import generate_sql, execute_sql, format_sql_results_for_llm
 from app.config import settings
+from app.rate_limit import limiter
 import asyncio
 import json
 import logging
@@ -56,7 +57,8 @@ async def delete_conversation(conversation_id: str, user: dict = Depends(get_cur
 
 
 @router.post("/conversations/{conversation_id}/messages")
-async def send_message(conversation_id: str, body: MessageCreate, user: dict = Depends(get_current_user)):
+@limiter.limit("10/minute")
+async def send_message(request: Request, conversation_id: str, body: MessageCreate, user: dict = Depends(get_current_user)):
     supabase = get_supabase_client()
 
     # Verify conversation ownership
@@ -95,6 +97,15 @@ async def send_message(conversation_id: str, body: MessageCreate, user: dict = D
         tool_content = ""
 
         try:
+            # ── Load user LLM settings ───────────────────────────────────────
+            user_llm = supabase.table("user_settings").select("*").eq("user_id", user["id"]).maybe_single().execute()
+            u = user_llm.data or {}
+            _api_key = u.get("llm_api_key") or settings.LLM_API_KEY
+            _base_url = u.get("llm_base_url") or settings.LLM_BASE_URL
+            _model = u.get("llm_model") or settings.LLM_MODEL
+            _sys_prompt = u.get("llm_system_prompt") or None  # None → use SYSTEM_PROMPT default
+            llm_client = build_user_llm_client(_api_key, _base_url)
+
             # ── Route the query ─────────────────────────────────────────────
             route = await asyncio.to_thread(route_query, body.content, has_documents)
 
@@ -189,7 +200,7 @@ async def send_message(conversation_id: str, body: MessageCreate, user: dict = D
                     },
                     {"role": "tool", "tool_call_id": synthetic_id, "content": tool_content},
                 ]
-                stream = create_chat_stream_with_tools(loop_messages, tools=None, extra_system_context=memory_context)
+                stream = create_chat_stream_with_tools(loop_messages, tools=None, extra_system_context=memory_context, client=llm_client, model=_model, system_prompt=_sys_prompt)
 
             # ── Route: web_search ───────────────────────────────────────────
             elif route.route == "web_search":
@@ -230,7 +241,7 @@ async def send_message(conversation_id: str, body: MessageCreate, user: dict = D
                     },
                     {"role": "tool", "tool_call_id": synthetic_id, "content": tool_content},
                 ]
-                stream = create_chat_stream_with_tools(loop_messages, tools=None, extra_system_context=memory_context)
+                stream = create_chat_stream_with_tools(loop_messages, tools=None, extra_system_context=memory_context, client=llm_client, model=_model, system_prompt=_sys_prompt)
 
             # ── Route: sql_query ────────────────────────────────────────────
             elif route.route == "sql_query":
@@ -279,11 +290,11 @@ async def send_message(conversation_id: str, body: MessageCreate, user: dict = D
                     },
                     {"role": "tool", "tool_call_id": synthetic_id, "content": tool_content},
                 ]
-                stream = create_chat_stream_with_tools(loop_messages, tools=None, extra_system_context=memory_context)
+                stream = create_chat_stream_with_tools(loop_messages, tools=None, extra_system_context=memory_context, client=llm_client, model=_model, system_prompt=_sys_prompt)
 
             # ── Route: general ──────────────────────────────────────────────
             else:
-                stream = create_chat_stream_with_tools(list(messages), tools=None, extra_system_context=memory_context)
+                stream = create_chat_stream_with_tools(list(messages), tools=None, extra_system_context=memory_context, client=llm_client, model=_model, system_prompt=_sys_prompt)
 
             # ── Stream the synthesized answer ───────────────────────────────
             for chunk in stream:
