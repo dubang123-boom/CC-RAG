@@ -16,7 +16,7 @@ export async function GET(
 
   const { data: doc, error } = await supabaseServer
     .from('gjt_documents')
-    .select('statement_md, response_letter_md, hearing_application_md')
+    .select('statement_md, response_letter_md, hearing_application_md, evidence_checklist_md, negotiation_script_md, risk_warning_md')
     .eq('case_id', caseId)
     .order('version', { ascending: false })
     .limit(1)
@@ -33,6 +33,17 @@ export async function GET(
   if (type === 'hearing') {
     markdown = doc.hearing_application_md;
     filename = '听证申请书.docx';
+  } else if (type === 'evidence') {
+    markdown = doc.evidence_checklist_md
+      ? '# **证据清单与附件准备指南**\n\n' + doc.evidence_checklist_md
+      : null;
+    filename = '证据清单.docx';
+  } else if (type === 'negotiation') {
+    markdown = doc.negotiation_script_md;
+    filename = '协商话术.docx';
+  } else if (type === 'risk') {
+    markdown = doc.risk_warning_md;
+    filename = '整改与风险.docx';
   } else {
     // statement_md for 申辩书, response_letter_md for 投诉回复函
     markdown = doc.statement_md ?? doc.response_letter_md;

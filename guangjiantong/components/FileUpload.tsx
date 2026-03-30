@@ -34,7 +34,7 @@ export default function FileUpload({ activationCode }: FileUploadProps) {
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [analyzeMessage, setAnalyzeMessage] = useState('');
-  const [inputMode, setInputMode] = useState<InputMode>('file');
+  const [inputMode, setInputMode] = useState<InputMode>('text');
   const [textContent, setTextContent] = useState('');
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
@@ -247,17 +247,6 @@ export default function FileUpload({ activationCode }: FileUploadProps) {
       <div className="flex rounded-lg border bg-muted p-1">
         <button
           className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-            inputMode === 'file'
-              ? 'bg-background text-foreground shadow-sm'
-              : 'text-muted-foreground hover:text-foreground'
-          }`}
-          onClick={() => { setInputMode('file'); resetState(); }}
-          disabled={isProcessing}
-        >
-          上传 PDF
-        </button>
-        <button
-          className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
             inputMode === 'text'
               ? 'bg-background text-foreground shadow-sm'
               : 'text-muted-foreground hover:text-foreground'
@@ -266,6 +255,17 @@ export default function FileUpload({ activationCode }: FileUploadProps) {
           disabled={isProcessing}
         >
           粘贴文字
+        </button>
+        <button
+          className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+            inputMode === 'file'
+              ? 'bg-background text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+          onClick={() => { setInputMode('file'); resetState(); }}
+          disabled={isProcessing}
+        >
+          上传 PDF
         </button>
       </div>
 

@@ -7,11 +7,22 @@ import { marked } from 'marked';
 import { Header } from '@/components/layout/header';
 import { Main } from '@/components/layout/main';
 import DeadlineCountdown from '@/components/DeadlineCountdown';
+import CopyButton from '@/components/CopyButton';
+
+type TabKey = 'statement' | 'evidence' | 'hearing';
 
 function DoneContent() {
   const searchParams = useSearchParams();
   const caseId = searchParams.get('caseId');
+  const [activeTab, setActiveTab] = useState<TabKey>('statement');
   const [deadline, setDeadline] = useState<string | null>(null);
+
+  // Raw markdown for copy
+  const [statementMd, setStatementMd] = useState<string | null>(null);
+  const [evidenceChecklistMd, setEvidenceChecklistMd] = useState<string | null>(null);
+  const [hearingApplicationMd, setHearingApplicationMd] = useState<string | null>(null);
+
+  // Rendered HTML
   const [documentHtml, setDocumentHtml] = useState<string | null>(null);
   const [evidenceHtml, setEvidenceHtml] = useState<string | null>(null);
   const [hearingHtml, setHearingHtml] = useState<string | null>(null);
@@ -28,14 +39,18 @@ function DoneContent() {
         }
         // Render document markdown inline
         if (json.document?.statement_md) {
+          setStatementMd(json.document.statement_md);
           const html = await marked(json.document.statement_md);
           setDocumentHtml(html);
         }
         if (json.document?.evidence_checklist_md) {
+          setEvidenceChecklistMd(json.document.evidence_checklist_md);
           const html = await marked(json.document.evidence_checklist_md);
-          setEvidenceHtml(html);
+          const titleHtml = '<h1><strong>证据清单与附件准备指南</strong></h1>';
+          setEvidenceHtml(titleHtml + html);
         }
         if (json.document?.hearing_application_md) {
+          setHearingApplicationMd(json.document.hearing_application_md);
           const html = await marked(json.document.hearing_application_md);
           setHearingHtml(html);
         }
@@ -49,6 +64,20 @@ function DoneContent() {
     if (!caseId) return;
     fetchCaseData();
   }, [caseId, fetchCaseData]);
+
+  const tabs: { key: TabKey; label: string; hasContent: boolean }[] = [
+    { key: 'statement', label: '陈述申辩意见书', hasContent: !!documentHtml },
+    { key: 'evidence', label: '证据清单', hasContent: !!evidenceHtml },
+    { key: 'hearing', label: '听证申请书', hasContent: !!hearingHtml },
+  ];
+
+  const currentMd = activeTab === 'statement' ? statementMd
+    : activeTab === 'evidence' ? evidenceChecklistMd
+      : hearingApplicationMd;
+
+  const currentHtml = activeTab === 'statement' ? documentHtml
+    : activeTab === 'evidence' ? evidenceHtml
+      : hearingHtml;
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6">
@@ -142,6 +171,15 @@ function DoneContent() {
             下载 陈述申辩意见书 Word
           </a>
         )}
+        {caseId && evidenceHtml && (
+          <a
+            href={`/api/download/${caseId}?type=evidence`}
+            download="证据清单.docx"
+            className="inline-flex items-center justify-center w-full max-w-md rounded-md border border-input bg-background px-6 py-3 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors"
+          >
+            下载 证据清单 Word
+          </a>
+        )}
         {caseId && hasHearing && (
           <a
             href={`/api/download/${caseId}?type=hearing`}
@@ -151,50 +189,42 @@ function DoneContent() {
             下载 听证申请书 Word
           </a>
         )}
-
-        {documentHtml && (
-          <button
-            onClick={() => window.print()}
-            className="inline-flex items-center justify-center w-full max-w-md rounded-md border border-input bg-background px-6 py-3 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors"
-          >
-            打印 / 另存为 PDF
-          </button>
-        )}
       </div>
 
-      {/* Inline document content */}
-      {documentHtml && (
-        <article
-          className="document-content rounded-lg border bg-white p-8 prose prose-sm max-w-none break-words dark:bg-zinc-950 dark:prose-invert
-            [&_h1]:text-center [&_h1]:text-xl [&_h1]:tracking-[0.5em] [&_h1]:mb-6
-            [&_h2]:text-base [&_h2]:mt-6 [&_h2]:mb-3
-            [&_p]:indent-8 [&_p]:my-2 [&_p]:leading-relaxed"
-          dangerouslySetInnerHTML={{ __html: documentHtml }}
-        />
-      )}
-
-      {/* Evidence checklist */}
-      {evidenceHtml && (
-        <div className="space-y-3 print-page-break">
-          <h2 className="text-lg font-semibold no-print">证据清单与附件准备指南</h2>
-          <article
-            className="document-content rounded-lg border bg-white p-8 prose prose-sm max-w-none break-words dark:bg-zinc-950 dark:prose-invert
-              [&_table]:w-full [&_th]:text-left [&_th]:p-2 [&_td]:p-2 [&_table]:border-collapse [&_th]:border [&_td]:border"
-            dangerouslySetInnerHTML={{ __html: evidenceHtml }}
-          />
+      {/* Tab Navigation */}
+      {(documentHtml || evidenceHtml || hearingHtml) && (
+        <div className="no-print">
+          <div className="flex rounded-lg border bg-muted p-1">
+            {tabs.filter(t => t.hasContent).map(tab => (
+              <button
+                key={tab.key}
+                className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  activeTab === tab.key
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+                onClick={() => setActiveTab(tab.key)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
-      {/* Hearing application */}
-      {hearingHtml && (
-        <div className="space-y-3 print-page-break">
-          <h2 className="text-lg font-semibold no-print">听证申请书</h2>
+      {/* Tab Content */}
+      {currentHtml && (
+        <div className="space-y-3">
+          <div className="flex justify-end no-print">
+            {currentMd && <CopyButton text={currentMd} label="复制内容" />}
+          </div>
           <article
-            className="document-content rounded-lg border bg-white p-8 prose prose-sm max-w-none break-words dark:bg-zinc-950 dark:prose-invert
+            className={`document-content rounded-lg border bg-white p-8 prose prose-sm max-w-none break-words dark:bg-zinc-950 dark:prose-invert
               [&_h1]:text-center [&_h1]:text-xl [&_h1]:tracking-[0.5em] [&_h1]:mb-6
               [&_h2]:text-base [&_h2]:mt-6 [&_h2]:mb-3
-              [&_p]:indent-8 [&_p]:my-2 [&_p]:leading-relaxed"
-            dangerouslySetInnerHTML={{ __html: hearingHtml }}
+              [&_p]:indent-8 [&_p]:my-2 [&_p]:leading-relaxed
+              [&_table]:w-full [&_th]:text-left [&_th]:p-2 [&_td]:p-2 [&_table]:border-collapse [&_th]:border [&_td]:border`}
+            dangerouslySetInnerHTML={{ __html: currentHtml }}
           />
         </div>
       )}

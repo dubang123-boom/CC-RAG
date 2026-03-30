@@ -139,13 +139,23 @@ function ComplaintDoneContent() {
           </a>
         )}
 
-        {responseHtml && (
-          <button
-            onClick={() => window.print()}
+        {caseId && negotiationHtml && (
+          <a
+            href={`/api/download/${caseId}?type=negotiation`}
+            download="协商话术.docx"
             className="inline-flex items-center justify-center w-full max-w-md rounded-md border border-input bg-background px-6 py-3 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors"
           >
-            打印 / 另存为 PDF
-          </button>
+            下载 协商话术 Word
+          </a>
+        )}
+        {caseId && riskHtml && (
+          <a
+            href={`/api/download/${caseId}?type=risk`}
+            download="整改与风险.docx"
+            className="inline-flex items-center justify-center w-full max-w-md rounded-md border border-input bg-background px-6 py-3 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors"
+          >
+            下载 整改与风险 Word
+          </a>
         )}
       </div>
 
